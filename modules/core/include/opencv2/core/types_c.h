@@ -336,6 +336,25 @@ CV_INLINE  int  cvRound( double value )
 #endif
 }
 
+CV_INLINE  int  cvRound( float value )
+{
+#if defined CV_ICC || defined __GNUC__
+    return (int)lrintf(value);
+#else
+    double intpart, fractpart;
+    fractpart = modf(value, &intpart);
+    if ((fabs(fractpart) != 0.5) || ((((int)intpart) % 2) != 0))
+        return (int)(value + (value >= 0 ? 0.5 : -0.5));
+    else
+        return (int)intpart;
+#endif
+}
+
+CV_INLINE  int  cvRound( int value )
+{
+    return value;
+}
+
 #if defined __SSE2__ || (defined _M_IX86_FP && 2 == _M_IX86_FP)
 #  include "emmintrin.h"
 #endif
