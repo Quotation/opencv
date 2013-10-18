@@ -274,7 +274,12 @@ struct SURFBuildInvoker : ParallelLoopBody
     void operator()(const Range& range) const
     {
         for( int i=range.start; i<range.end; i++ )
-            calcLayerDetAndTrace( *sum, (*sizes)[i], (*sampleSteps)[i], (*dets)[i], (*traces)[i] );
+        {
+            if ((*sampleSteps)[i] > 0)
+            {
+                calcLayerDetAndTrace( *sum, (*sizes)[i], (*sampleSteps)[i], (*dets)[i], (*traces)[i] );
+            }
+        }
     }
 
     const Mat *sum;
@@ -315,10 +320,13 @@ struct SURFFindInvoker : ParallelLoopBody
         for( int i=range.start; i<range.end; i++ )
         {
             int layer = (*middleIndices)[i];
-            int octave = i / nOctaveLayers;
-            findMaximaInLayer( *sum, *mask_sum, *dets, *traces, *sizes,
-                               *keypoints, octave, layer, hessianThreshold,
-                               (*sampleSteps)[layer] );
+            if((*sampleSteps)[layer] > 0)
+            {
+                int octave = i / nOctaveLayers;
+                findMaximaInLayer( *sum, *mask_sum, *dets, *traces, *sizes,
+                                   *keypoints, octave, layer, hessianThreshold,
+                                   (*sampleSteps)[layer] );
+            }
         }
     }
 
@@ -460,7 +468,7 @@ struct KeypointGreater
 
 
 static void fastHessianDetector( const Mat& sum, const Mat& mask_sum, vector<KeyPoint>& keypoints,
-                                 int nOctaves, int nOctaveLayers, float hessianThreshold )
+                                 int nOctaves, int nOctaveLayers, int nInitOctave, float hessianThreshold )
 {
     /* Sampling step along image x and y axes at first octave. This is doubled
        for each additional octave. WARNING: Increasing this improves speed,
@@ -479,18 +487,26 @@ static void fastHessianDetector( const Mat& sum, const Mat& mask_sum, vector<Key
     keypoints.clear();
 
     // Allocate space and calculate properties of each layer
-    int index = 0, middleIndex = 0, step = SAMPLE_STEP0;
+    int index = 0, middleIndex = 0, step = (SAMPLE_STEP0 << nInitOctave);
 
     for( int octave = 0; octave < nOctaves; octave++ )
     {
         for( int layer = 0; layer < nOctaveLayers+2; layer++ )
         {
-            /* The integral image sum is one pixel bigger than the source image*/
-            dets[index].create( (sum.rows-1)/step, (sum.cols-1)/step, CV_32F );
-            traces[index].create( (sum.rows-1)/step, (sum.cols-1)/step, CV_32F );
-            sizes[index] = (SURF_HAAR_SIZE0 + SURF_HAAR_SIZE_INC*layer) << octave;
-            sampleSteps[index] = step;
-
+            if(octave >= nInitOctave)
+            {
+                /* The integral image sum is one pixel bigger than the source image*/
+                dets[index].create( (sum.rows-1)/step, (sum.cols-1)/step, CV_32F );
+                traces[index].create( (sum.rows-1)/step, (sum.cols-1)/step, CV_32F );
+                sizes[index] = (SURF_HAAR_SIZE0 + SURF_HAAR_SIZE_INC*layer) << octave;
+                sampleSteps[index] = step;
+            } 
+            else
+            {
+                // set to 0 for skipping calculation
+                sampleSteps[index] = 0;
+            }
+            
             if( 0 < layer && layer <= nOctaveLayers )
                 middleIndices[middleIndex++] = index;
             index++;
@@ -875,13 +891,14 @@ SURF::SURF()
     nOctaveLayers = 3;
 }
 
-SURF::SURF(double _threshold, int _nOctaves, int _nOctaveLayers, bool _extended, bool _upright)
+SURF::SURF(double _threshold, int _nOctaves, int _nOctaveLayers, int _nInitOctave, bool _extended, bool _upright)
 {
     hessianThreshold = _threshold;
     extended = _extended;
     upright = _upright;
     nOctaves = _nOctaves;
     nOctaveLayers = _nOctaveLayers;
+    nInitOctave = _nInitOctave;
 }
 
 int SURF::descriptorSize() const { return extended ? 128 : 64; }
@@ -909,6 +926,7 @@ void SURF::operator()(InputArray _img, InputArray _mask,
     CV_Assert(hessianThreshold >= 0);
     CV_Assert(nOctaves > 0);
     CV_Assert(nOctaveLayers > 0);
+    CV_Assert(nInitOctave >= 0 && nInitOctave < nOctaves);
 
     integral(img, sum, CV_32S);
 
@@ -920,7 +938,7 @@ void SURF::operator()(InputArray _img, InputArray _mask,
             cv::min(mask, 1, mask1);
             integral(mask1, msum, CV_32S);
         }
-        fastHessianDetector( sum, msum, keypoints, nOctaves, nOctaveLayers, (float)hessianThreshold );
+        fastHessianDetector( sum, msum, keypoints, nOctaves, nOctaveLayers, nInitOctave, (float)hessianThreshold );
     }
 
     int i, j, N = (int)keypoints.size();

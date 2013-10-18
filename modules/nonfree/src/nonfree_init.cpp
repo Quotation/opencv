@@ -51,6 +51,7 @@ CV_INIT_ALGORITHM(SURF, "Feature2D.SURF",
                   obj.info()->addParam(obj, "hessianThreshold", obj.hessianThreshold);
                   obj.info()->addParam(obj, "nOctaves", obj.nOctaves);
                   obj.info()->addParam(obj, "nOctaveLayers", obj.nOctaveLayers);
+                  obj.info()->addParam(obj, "nInitOctave", obj.nInitOctave);
                   obj.info()->addParam(obj, "extended", obj.extended);
                   obj.info()->addParam(obj, "upright", obj.upright));
 

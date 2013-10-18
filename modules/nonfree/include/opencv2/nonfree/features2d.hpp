@@ -111,7 +111,7 @@ public:
     CV_WRAP SURF();
     //! the full constructor taking all the necessary parameters
     explicit CV_WRAP SURF(double hessianThreshold,
-                  int nOctaves=4, int nOctaveLayers=2,
+                  int nOctaves=4, int nOctaveLayers=2, int nInitOctave=0,
                   bool extended=true, bool upright=false);
 
     //! returns the descriptor size in float's (64 or 128)
@@ -134,6 +134,7 @@ public:
     CV_PROP_RW double hessianThreshold;
     CV_PROP_RW int nOctaves;
     CV_PROP_RW int nOctaveLayers;
+    CV_PROP_RW int nInitOctave;
     CV_PROP_RW bool extended;
     CV_PROP_RW bool upright;
 
