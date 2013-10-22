@@ -3027,7 +3027,8 @@ private:
 
 void cv::remap( InputArray _src, OutputArray _dst,
                 InputArray _map1, InputArray _map2,
-                int interpolation, int borderType, const Scalar& borderValue )
+                int interpolation, int borderType, const Scalar& borderValue,
+                bool parallel )
 {
     static RemapNNFunc nn_tab[] =
     {
@@ -3119,7 +3120,10 @@ void cv::remap( InputArray _src, OutputArray _dst,
     RemapInvoker invoker(src, dst, m1, m2, interpolation,
                          borderType, borderValue, planar_input, nnfunc, ifunc,
                          ctab);
-    parallel_for_(Range(0, dst.rows), invoker, dst.total()/(double)(1<<16));
+    if (parallel)
+        parallel_for_(Range(0, dst.rows), invoker, dst.total()/(double)(1<<16));
+    else
+        invoker(Range(0, dst.rows));
 }
 
 
@@ -3608,11 +3612,11 @@ public:
                 }
 
                 if( interpolation == INTER_NEAREST )
-                    remap( src, dpart, _XY, Mat(), interpolation, borderType, borderValue );
+                    remap( src, dpart, _XY, Mat(), interpolation, borderType, borderValue, false );
                 else
                 {
                     Mat _matA(bh, bw, CV_16U, A);
-                    remap( src, dpart, _XY, _matA, interpolation, borderType, borderValue );
+                    remap( src, dpart, _XY, _matA, interpolation, borderType, borderValue, false );
                 }
             }
         }

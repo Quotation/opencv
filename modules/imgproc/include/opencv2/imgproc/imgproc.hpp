@@ -590,7 +590,8 @@ enum
 CV_EXPORTS_W void remap( InputArray src, OutputArray dst,
                          InputArray map1, InputArray map2,
                          int interpolation, int borderMode=BORDER_CONSTANT,
-                         const Scalar& borderValue=Scalar());
+                         const Scalar& borderValue=Scalar(),
+                         bool parallel=true);
 
 //! converts maps for remap from floating-point to fixed-point format or backwards
 CV_EXPORTS_W void convertMaps( InputArray map1, InputArray map2,
