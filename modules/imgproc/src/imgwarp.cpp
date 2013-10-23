@@ -3781,13 +3781,13 @@ public:
                 Mat _XY(bh, bw, CV_16SC2, XY), matA;
                 Mat dpart(dst, Rect(x, y, bw, bh));
 
+                short* xy = XY;
+                double X0 = M[0]*x + M[1]*y + M[2];
+                double Y0 = M[3]*x + M[4]*y + M[5];
+                double W0 = M[6]*x + M[7]*y + M[8];
+
                 for( y1 = 0; y1 < bh; y1++ )
                 {
-                    short* xy = XY + y1*bw*2;
-                    double X0 = M[0]*x + M[1]*(y + y1) + M[2];
-                    double Y0 = M[3]*x + M[4]*(y + y1) + M[5];
-                    double W0 = M[6]*x + M[7]*(y + y1) + M[8];
-
                     if( interpolation == INTER_NEAREST )
                         for( x1 = 0; x1 < bw; x1++ )
                         {
@@ -3804,7 +3804,51 @@ public:
                     else
                     {
                         short* alpha = A + y1*bw;
-                        for( x1 = 0; x1 < bw; x1++ )
+                        x1 = 0;
+    
+                    #if CV_NEON
+                        float tabsizeF = (float)INTER_TAB_SIZE;
+                        float f0_4[] = { 0, 1, 2, 3 };
+                        float32x4_t vx1 = vld1q_f32(f0_4);
+                        float32x4_t vX0 = vdupq_n_f32((float)X0);
+                        float32x4_t vY0 = vdupq_n_f32((float)Y0);
+                        float32x4_t vf4 = vdupq_n_f32(4.0f);
+                        int32x4_t vAMask = vdupq_n_s32(INTER_TAB_SIZE-1);
+                        
+                        float32x4_t vM6x4 = vdupq_n_f32((float)M[6]*4);
+                        float32x4_t vW_ = vaddq_f32(vdupq_n_f32((float)W0),
+                                                    vmulq_n_f32(vx1, (float)M[6]));
+
+                        for ( ; x1 < bw - 4; x1 += 4 )
+                        {
+                            float32x4_t vW_R = vrecpeq_f32(vW_);
+                            vW_R = vmulq_f32(vrecpsq_f32(vW_, vW_R), vW_R);
+                            vW_R = vmulq_f32(vrecpsq_f32(vW_, vW_R), vW_R);
+                            float32x4_t vW = vmulq_n_f32(vW_R, tabsizeF);
+        
+                            float32x4_t vfX = vmulq_f32(vaddq_f32(vX0, vmulq_n_f32(vx1, (float)M[0])), vW);
+                            float32x4_t vfY = vmulq_f32(vaddq_f32(vY0, vmulq_n_f32(vx1, (float)M[3])), vW);
+                            int32x4_t vX = vcvtq_s32_f32(vfX);
+                            int32x4_t vY = vcvtq_s32_f32(vfY);
+                            
+                            int16x4x2_t vxy;
+                            vxy.val[0] = vqmovn_s32(vshrq_n_s32(vX, INTER_BITS));
+                            vxy.val[1] = vqmovn_s32(vshrq_n_s32(vY, INTER_BITS));
+        
+                            int32x4_t vAlpha = vaddq_s32(vshlq_n_s32(vandq_s32(vY, vAMask),
+                                                                     INTER_BITS),
+                                                         vandq_s32(vX, vAMask));
+        
+                            vst2_s16(xy + x1*2, vxy);
+                            vst1_s16(alpha + x1, vmovn_s32(vAlpha));
+        
+                            // advance
+                            vW_ = vaddq_f32(vW_, vM6x4);
+                            vx1 = vaddq_f32(vx1, vf4);
+                        }
+                    #endif
+                        
+                        for( ; x1 < bw; x1++ )
                         {
                             double W = W0 + M[6]*x1;
                             W = W ? INTER_TAB_SIZE/W : 0;
@@ -3819,6 +3863,11 @@ public:
                                                 (X & (INTER_TAB_SIZE-1)));
                         }
                     }
+                
+                    xy += bw*2;
+                    X0 += M[1];
+                    Y0 += M[4];
+                    W0 += M[7];
                 }
 
                 if( interpolation == INTER_NEAREST )
